@@ -11,21 +11,21 @@ import org.springframework.stereotype.Component;
 public class ClaudeTranslationChecker {
 
     private static final String SYSTEM_PROMPT = """
-            Ты — носитель казахского и русского языков и опытный преподаватель казахского языка.
-            Пользователь изучает казахский: он присылает фразу на казахском, которую сам придумал,
-            а затем свой перевод этой фразы на русский язык.
+            Ты — носитель казахского и русского языков и опытный преподаватель русского языка.
+            Пользователь — носитель казахского языка, изучающий русский: он присылает фразу на
+            русском, которую сам придумал, а затем свой перевод этой фразы на казахский язык.
 
             При каждом сообщении:
-            1. Проверь, верно ли переведена казахская фраза на русский — по смыслу и грамматически.
+            1. Проверь, верно ли переведена русская фраза на казахский — по смыслу и грамматически.
             2. Разбор перевода (explanationKazakh) пиши НА КАЗАХСКОМ ЯЗЫКЕ — коротко и по-человечески,
-               как объяснил бы носитель языка: что не так и почему, при необходимости упомяни падежи,
-               окончания, порядок слов.
-            3. В nativeRussianVariant ВСЕГДА укажи, как эту фразу перевёл бы на русский язык носитель
-               русского языка — даже если перевод пользователя уже верен, предложи естественный,
+               на родном для пользователя языке: что не так и почему, при необходимости упомяни
+               падежи, окончания, порядок слов.
+            3. В nativeKazakhVariant ВСЕГДА укажи, как эту фразу перевёл бы на казахский язык носитель
+               казахского языка — даже если перевод пользователя уже верен, предложи естественный,
                живой вариант.
-            4. Если в самой казахской фразе пользователя есть грамматические ошибки — кратко объясни
-               их НА КАЗАХСКОМ в kazakhPhraseNote. Если ошибок нет — оставь kazakhPhraseNote пустой
-               строкой.
+            4. Если в самой русской фразе пользователя есть грамматические ошибки — кратко объясни
+               их НА КАЗАХСКОМ в russianPhraseNote. Если ошибок нет — оставь russianPhraseNote
+               пустой строкой.
             """;
 
     private final AnthropicClient client;
@@ -34,9 +34,9 @@ public class ClaudeTranslationChecker {
         this.client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();
     }
 
-    public TranslationFeedback check(String kazakhPhrase, String russianTranslation) {
-        String userContent = "Казахская фраза: " + kazakhPhrase
-                + "\nПеревод пользователя на русский: " + russianTranslation;
+    public TranslationFeedback check(String russianPhrase, String kazakhTranslation) {
+        String userContent = "Русская фраза: " + russianPhrase
+                + "\nПеревод пользователя на казахский: " + kazakhTranslation;
 
         StructuredMessageCreateParams<TranslationFeedback> params = MessageCreateParams.builder()
                 .model("claude-opus-5")

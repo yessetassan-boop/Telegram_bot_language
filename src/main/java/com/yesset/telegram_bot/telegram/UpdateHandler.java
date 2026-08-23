@@ -2,7 +2,15 @@ package com.yesset.telegram_bot.telegram;
 
 import com.anthropic.errors.AnthropicServiceException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yesset.telegram_bot.claude.ClaudeDialoguePartner;
+import com.yesset.telegram_bot.claude.ClaudeExerciseChecker;
+import com.yesset.telegram_bot.claude.ClaudeExerciseGenerator;
 import com.yesset.telegram_bot.claude.ClaudeTranslationChecker;
+import com.yesset.telegram_bot.claude.DialogueTurn;
+import com.yesset.telegram_bot.claude.DialogueTurnFormatter;
+import com.yesset.telegram_bot.claude.ExerciseFeedback;
+import com.yesset.telegram_bot.claude.ExerciseFeedbackFormatter;
+import com.yesset.telegram_bot.claude.ExercisePrompt;
 import com.yesset.telegram_bot.claude.TranslationFeedback;
 import com.yesset.telegram_bot.claude.TranslationFeedbackFormatter;
 import com.yesset.telegram_bot.claude.WordReference;
@@ -23,11 +31,13 @@ public class UpdateHandler {
     private static final Logger log = LoggerFactory.getLogger(UpdateHandler.class);
 
     private static final String WELCOME_TEXT = """
-            Привет! Я помогу учить казахский язык.
+            Привет! Я помогу учить русский язык.
 
-            Есть два режима:
-            📝 Проверка грамматики — пишешь фразу на казахском и её перевод на русский, я разбираю ошибки.
-            📖 Разбор слова — присылаешь слово (например, глагол), а я показываю его формы: спряжения, падежи, послелоги.
+            Есть четыре режима:
+            📝 Проверка грамматики — пишешь фразу на русском и её перевод на казахский, я разбираю ошибки.
+            📖 Разбор слова — присылаешь слово на русском (например, глагол), а я показываю его формы: приставочные однокоренные слова, спряжения, падежи.
+            🎯 Тренировка — я даю слово или фразу на казахском, ты переводишь на русский, я проверяю.
+            💬 Диалог — свободное общение на русском, я поддерживаю разговор и подсказываю на казахском, если есть ошибки.
 
             В любой момент вернуться к выбору режима — команда /menu.
             """;
@@ -36,22 +46,33 @@ public class UpdateHandler {
 
     private static final List<InlineButton> MENU_BUTTONS = List.of(
             new InlineButton("📝 Проверка грамматики", "mode:grammar"),
-            new InlineButton("📖 Разбор слова", "mode:word")
+            new InlineButton("📖 Разбор слова", "mode:word"),
+            new InlineButton("🎯 Тренировка", "mode:exercise"),
+            new InlineButton("💬 Диалог", "mode:dialogue")
     );
 
     private final TelegramClient telegramClient;
     private final UserSessionService sessionService;
     private final ClaudeTranslationChecker translationChecker;
     private final WordReferenceChecker wordReferenceChecker;
+    private final ClaudeExerciseGenerator exerciseGenerator;
+    private final ClaudeExerciseChecker exerciseChecker;
+    private final ClaudeDialoguePartner dialoguePartner;
 
     public UpdateHandler(TelegramClient telegramClient,
                           UserSessionService sessionService,
                           ClaudeTranslationChecker translationChecker,
-                          WordReferenceChecker wordReferenceChecker) {
+                          WordReferenceChecker wordReferenceChecker,
+                          ClaudeExerciseGenerator exerciseGenerator,
+                          ClaudeExerciseChecker exerciseChecker,
+                          ClaudeDialoguePartner dialoguePartner) {
         this.telegramClient = telegramClient;
         this.sessionService = sessionService;
         this.translationChecker = translationChecker;
         this.wordReferenceChecker = wordReferenceChecker;
+        this.exerciseGenerator = exerciseGenerator;
+        this.exerciseChecker = exerciseChecker;
+        this.dialoguePartner = dialoguePartner;
     }
 
     public void handle(JsonNode update) {
@@ -94,9 +115,11 @@ public class UpdateHandler {
         UserSession session = sessionService.get(chatId);
         switch (session.getState()) {
             case CHOOSING_MODE -> telegramClient.sendMenu(chatId, MENU_TEXT, MENU_BUTTONS);
-            case GRAMMAR_WAITING_KAZAKH -> handleKazakhPhrase(chatId, session, text);
+            case GRAMMAR_WAITING_RUSSIAN -> handleRussianPhrase(chatId, session, text);
             case GRAMMAR_WAITING_TRANSLATION -> handleTranslation(chatId, session, text);
             case WORD_WAITING_WORD -> handleWordLookup(chatId, text);
+            case EXERCISE_WAITING_ANSWER -> handleExerciseAnswer(chatId, session, text);
+            case DIALOGUE_ACTIVE -> handleDialogueMessage(chatId, session, text);
         }
     }
 
@@ -114,15 +137,27 @@ public class UpdateHandler {
 
         switch (dataNode.asText()) {
             case "mode:grammar" -> {
-                session.setState(SessionState.GRAMMAR_WAITING_KAZAKH);
-                session.setKazakhPhrase(null);
+                session.setState(SessionState.GRAMMAR_WAITING_RUSSIAN);
+                session.setRussianPhrase(null);
                 telegramClient.sendMessage(chatId,
-                        "Режим: проверка грамматики.\n\nНапиши фразу на казахском языке.");
+                        "Режим: проверка грамматики.\n\nНапиши фразу на русском языке.");
             }
             case "mode:word" -> {
                 session.setState(SessionState.WORD_WAITING_WORD);
                 telegramClient.sendMessage(chatId,
-                        "Режим: разбор слова.\n\nПришли слово на казахском (например, глагол) — покажу его формы.");
+                        "Режим: разбор слова.\n\nПришли слово на русском (например, глагол) — покажу его формы.");
+            }
+            case "mode:exercise" -> {
+                session.setState(SessionState.EXERCISE_WAITING_ANSWER);
+                telegramClient.sendMessage(chatId,
+                        "Режим: тренировка.\n\nЯ буду давать слово или фразу на казахском — переводи на русский.");
+                sendNextExercise(chatId, session);
+            }
+            case "mode:dialogue" -> {
+                session.setState(SessionState.DIALOGUE_ACTIVE);
+                session.clearDialogueHistory();
+                telegramClient.sendMessage(chatId,
+                        "Режим: диалог.\n\nНапиши что-нибудь на русском, а я подхвачу разговор. Если будут ошибки — подскажу на казахском.");
             }
             default -> {
             }
@@ -131,29 +166,29 @@ public class UpdateHandler {
         telegramClient.answerCallbackQuery(callbackId);
     }
 
-    private void handleKazakhPhrase(long chatId, UserSession session, String text) {
-        session.setKazakhPhrase(text);
+    private void handleRussianPhrase(long chatId, UserSession session, String text) {
+        session.setRussianPhrase(text);
         session.setState(SessionState.GRAMMAR_WAITING_TRANSLATION);
-        telegramClient.sendMessage(chatId, "Хорошо! Теперь переведи эту фразу на русский язык.");
+        telegramClient.sendMessage(chatId, "Хорошо! Теперь переведи эту фразу на казахский язык.");
     }
 
     private void handleTranslation(long chatId, UserSession session, String translation) {
-        String kazakhPhrase = session.getKazakhPhrase();
+        String russianPhrase = session.getRussianPhrase();
 
         try {
-            TranslationFeedback feedback = translationChecker.check(kazakhPhrase, translation);
+            TranslationFeedback feedback = translationChecker.check(russianPhrase, translation);
             telegramClient.sendHtmlMessage(chatId, TranslationFeedbackFormatter.toTelegramHtml(feedback));
         } catch (AnthropicServiceException e) {
             log.error("Claude API error while checking translation for chat {}", chatId, e);
             telegramClient.sendMessage(chatId,
                     "Не получилось проверить перевод — произошла ошибка на стороне ИИ. Попробуй ещё раз чуть позже.");
         } finally {
-            session.setState(SessionState.GRAMMAR_WAITING_KAZAKH);
-            session.setKazakhPhrase(null);
+            session.setState(SessionState.GRAMMAR_WAITING_RUSSIAN);
+            session.setRussianPhrase(null);
         }
 
         telegramClient.sendMessage(chatId,
-                "Напиши следующую фразу на казахском, когда будешь готов(а), или /menu, чтобы сменить режим.");
+                "Напиши следующую фразу на русском, когда будешь готов(а), или /menu, чтобы сменить режим.");
     }
 
     private void handleWordLookup(long chatId, String word) {
@@ -168,5 +203,47 @@ public class UpdateHandler {
 
         telegramClient.sendMessage(chatId,
                 "Пришли следующее слово, когда будешь готов(а), или /menu, чтобы сменить режим.");
+    }
+
+    private void handleExerciseAnswer(long chatId, UserSession session, String answer) {
+        String kazakhPhrase = session.getExercisePhrase();
+
+        if (kazakhPhrase != null) {
+            try {
+                ExerciseFeedback feedback = exerciseChecker.check(kazakhPhrase, answer);
+                telegramClient.sendHtmlMessage(chatId, ExerciseFeedbackFormatter.toTelegramHtml(feedback));
+            } catch (AnthropicServiceException e) {
+                log.error("Claude API error while checking exercise answer for chat {}", chatId, e);
+                telegramClient.sendMessage(chatId,
+                        "Не получилось проверить ответ — произошла ошибка на стороне ИИ.");
+            }
+        }
+
+        sendNextExercise(chatId, session);
+    }
+
+    private void sendNextExercise(long chatId, UserSession session) {
+        try {
+            ExercisePrompt prompt = exerciseGenerator.generate();
+            session.setExercisePhrase(prompt.kazakhPhrase());
+            telegramClient.sendHtmlMessage(chatId, ExerciseFeedbackFormatter.formatTask(prompt.kazakhPhrase()));
+        } catch (AnthropicServiceException e) {
+            log.error("Claude API error while generating exercise for chat {}", chatId, e);
+            session.setExercisePhrase(null);
+            telegramClient.sendMessage(chatId,
+                    "Не получилось создать задание — произошла ошибка на стороне ИИ. Попробуй ещё раз чуть позже или напиши /menu.");
+        }
+    }
+
+    private void handleDialogueMessage(long chatId, UserSession session, String text) {
+        try {
+            DialogueTurn turn = dialoguePartner.respond(session.getDialogueHistory(), text);
+            telegramClient.sendHtmlMessage(chatId, DialogueTurnFormatter.toTelegramHtml(turn));
+            session.addDialogueExchange(text, turn.replyRussian());
+        } catch (AnthropicServiceException e) {
+            log.error("Claude API error during dialogue for chat {}", chatId, e);
+            telegramClient.sendMessage(chatId,
+                    "Не получилось ответить — произошла ошибка на стороне ИИ. Попробуй написать ещё раз.");
+        }
     }
 }
