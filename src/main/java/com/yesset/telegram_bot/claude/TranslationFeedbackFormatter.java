@@ -18,7 +18,7 @@ public final class TranslationFeedbackFormatter {
         sb.append("\n\n");
 
         sb.append("<b>\ud83d\udde3 \u041a\u0430\u043a \u0441\u043a\u0430\u0437\u0430\u043b \u0431\u044b \u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c:</b>\n");
-        sb.append("<code>").append(escape(feedback.nativeKazakhVariant())).append("</code>");
+        sb.append("<code>").append(escape(feedback.nativeRussianVariant())).append("</code>");
 
         String russianNote = feedback.russianPhraseNote();
         if (russianNote != null && !russianNote.isBlank()) {
