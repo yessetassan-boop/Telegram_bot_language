@@ -20,11 +20,11 @@ public final class TranslationFeedbackFormatter {
         sb.append("<b>\ud83d\udde3 \u041a\u0430\u043a \u0441\u043a\u0430\u0437\u0430\u043b \u0431\u044b \u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c:</b>\n");
         sb.append("<code>").append(escape(feedback.nativeRussianVariant())).append("</code>");
 
-        String russianNote = feedback.russianPhraseNote();
-        if (russianNote != null && !russianNote.isBlank()) {
+        String kazakhNote = feedback.kazakhPhraseNote();
+        if (kazakhNote != null && !kazakhNote.isBlank()) {
             sb.append("\n\n");
-            sb.append("<b>\u26a0\ufe0f \u041f\u0440\u043e \u0442\u0432\u043e\u044e \u0440\u0443\u0441\u0441\u043a\u0443\u044e \u0444\u0440\u0430\u0437\u0443:</b>\n");
-            sb.append(escape(russianNote));
+            sb.append("<b>\u26a0\ufe0f \u041f\u0440\u043e \u0442\u0432\u043e\u044e \u043a\u0430\u0437\u0430\u0445\u0441\u043a\u0443\u044e \u0444\u0440\u0430\u0437\u0443:</b>\n");
+            sb.append(escape(kazakhNote));
         }
 
         return sb.toString();
