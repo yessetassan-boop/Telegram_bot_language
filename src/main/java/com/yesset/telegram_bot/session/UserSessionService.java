@@ -14,7 +14,10 @@ public class UserSessionService {
         return sessions.computeIfAbsent(chatId, id -> new UserSession());
     }
 
-    public void reset(long chatId) {
-        sessions.put(chatId, new UserSession());
+    /** Полный сброс сессии (для /start). Возвращает новую сессию. */
+    public UserSession reset(long chatId) {
+        UserSession session = new UserSession();
+        sessions.put(chatId, session);
+        return session;
     }
 }

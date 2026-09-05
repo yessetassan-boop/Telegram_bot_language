@@ -9,22 +9,21 @@ public final class TranslationFeedbackFormatter {
         StringBuilder sb = new StringBuilder();
 
         sb.append(feedback.translationCorrect()
-                ? "<b>\u2705 \u041f\u0435\u0440\u0435\u0432\u043e\u0434 \u0432\u0435\u0440\u043d\u044b\u0439!</b>"
-                : "<b>\u274c \u0412 \u043f\u0435\u0440\u0435\u0432\u043e\u0434\u0435 \u0435\u0441\u0442\u044c \u043d\u0435\u0442\u043e\u0447\u043d\u043e\u0441\u0442\u0438</b>");
+                ? "<b>✅ Верно!</b>"
+                : "<b>❌ Есть ошибки</b>");
         sb.append("\n\n");
 
-        sb.append("<b>\ud83d\udcdd \u0422\u04af\u0441\u0456\u043d\u0434\u0456\u0440\u043c\u0435:</b>\n");
-        sb.append("<i>").append(escape(feedback.explanationKazakh())).append("</i>");
-        sb.append("\n\n");
+        sb.append("<b>📝 Разбор:</b>\n<i>")
+                .append(escape(feedback.explanationBridge()))
+                .append("</i>\n\n");
 
-        sb.append("<b>\ud83d\udde3 \u041a\u0430\u043a \u0441\u043a\u0430\u0437\u0430\u043b \u0431\u044b \u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c:</b>\n");
-        sb.append("<code>").append(escape(feedback.nativeRussianVariant())).append("</code>");
+        sb.append("<b>🗣 Как сказал бы носитель:</b>\n<code>")
+                .append(escape(feedback.nativeVariant()))
+                .append("</code>");
 
-        String kazakhNote = feedback.kazakhPhraseNote();
-        if (kazakhNote != null && !kazakhNote.isBlank()) {
-            sb.append("\n\n");
-            sb.append("<b>\u26a0\ufe0f \u041f\u0440\u043e \u0442\u0432\u043e\u044e \u043a\u0430\u0437\u0430\u0445\u0441\u043a\u0443\u044e \u0444\u0440\u0430\u0437\u0443:</b>\n");
-            sb.append(escape(kazakhNote));
+        String tip = feedback.tipBridge();
+        if (tip != null && !tip.isBlank()) {
+            sb.append("\n\n<b>💡 Совет:</b>\n").append(escape(tip));
         }
 
         return sb.toString();

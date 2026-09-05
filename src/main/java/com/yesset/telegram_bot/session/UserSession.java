@@ -1,20 +1,21 @@
 package com.yesset.telegram_bot.session;
 
-import com.yesset.telegram_bot.claude.Homework;
-import com.yesset.telegram_bot.claude.HomeworkTask;
-
-import java.util.ArrayList;
-import java.util.List;
+import com.yesset.telegram_bot.claude.Decoding;
 
 public class UserSession {
 
     private SessionState state = SessionState.CHOOSING_MODE;
-    private String kazakhPhrase;
+    private LanguagePair languagePair = LanguagePair.KK_RU;
 
-    private Homework homework;
-    private int currentTaskIndex;
-    private int correctCount;
-    private final List<String> missedFocuses = new ArrayList<>();
+    /** Последний расшифрованный текст на изучаемом языке. */
+    private String lastText;
+    /** Результат последней расшифровки — для повторного показа и как эталон в тренировке. */
+    private Decoding lastDecoding;
+
+    /** Фраза на языке-мосте, которую ученик должен сказать на изучаемом языке. */
+    private String productionSource;
+    /** Необязательный эталон на изучаемом языке (например, исходный текст расшифровки). */
+    private String productionReference;
 
     public SessionState getState() {
         return state;
@@ -24,51 +25,52 @@ public class UserSession {
         this.state = state;
     }
 
-    public String getKazakhPhrase() {
-        return kazakhPhrase;
+    public LanguagePair getLanguagePair() {
+        return languagePair;
     }
 
-    public void setKazakhPhrase(String kazakhPhrase) {
-        this.kazakhPhrase = kazakhPhrase;
+    public void setLanguagePair(LanguagePair languagePair) {
+        this.languagePair = languagePair;
     }
 
-    public void startHomework(Homework homework) {
-        this.homework = homework;
-        this.currentTaskIndex = 0;
-        this.correctCount = 0;
-        this.missedFocuses.clear();
+    public String getLastText() {
+        return lastText;
     }
 
-    public HomeworkTask currentTask() {
-        return homework.tasks().get(currentTaskIndex);
+    public void setLastText(String lastText) {
+        this.lastText = lastText;
     }
 
-    public int taskNumber() {
-        return currentTaskIndex + 1;
+    public Decoding getLastDecoding() {
+        return lastDecoding;
     }
 
-    public int totalTasks() {
-        return homework.tasks().size();
+    public void setLastDecoding(Decoding lastDecoding) {
+        this.lastDecoding = lastDecoding;
     }
 
-    public boolean hasMoreTasks() {
-        return homework != null && currentTaskIndex < homework.tasks().size();
+    public String getProductionSource() {
+        return productionSource;
     }
 
-    public void recordResult(boolean correct, String grammarFocus) {
-        if (correct) {
-            correctCount++;
-        } else if (grammarFocus != null && !grammarFocus.isBlank()) {
-            missedFocuses.add(grammarFocus);
-        }
-        currentTaskIndex++;
+    public void setProductionSource(String productionSource) {
+        this.productionSource = productionSource;
     }
 
-    public int getCorrectCount() {
-        return correctCount;
+    public String getProductionReference() {
+        return productionReference;
     }
 
-    public List<String> getMissedFocuses() {
-        return missedFocuses;
+    public void setProductionReference(String productionReference) {
+        this.productionReference = productionReference;
+    }
+
+    /** Сбрасывает ход диалога, но сохраняет выбранную языковую пару. */
+    public void resetConversation() {
+        this.state = SessionState.CHOOSING_MODE;
+        this.lastText = null;
+        this.lastDecoding = null;
+        this.productionSource = null;
+        this.productionReference = null;
     }
 }

@@ -1,71 +1,55 @@
 package com.yesset.telegram_bot.claude;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
-import org.springframework.beans.factory.annotation.Value;
+import com.yesset.telegram_bot.session.LanguagePair;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ClaudeTranslationChecker {
 
-    private static final String SYSTEM_PROMPT = """
-            Ты — носитель казахского и русского языков и опытный преподаватель русского языка.
-            Твоя аудитория — носители казахского языка, которые изучают русский. Пользователь
-            присылает две вещи: фразу, которую он сам придумал НА КАЗАХСКОМ ЯЗЫКЕ (это описывает
-            мысль на его родном языке), и свой перевод этой фразы НА РУССКИЙ ЯЗЫК (это его попытка
-            составить фразу на изучаемом языке).
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
+            Ты — двуязычный носитель языков «{bridge}» и «{target}» и опытный преподаватель языка
+            «{target}». Твой ученик — носитель языка «{bridge}», он изучает «{target}». Ученику дали
+            фразу на языке «{bridge}», и он попытался сказать её на языке «{target}». Иногда есть
+            эталонный вариант на «{target}» — тогда ориентируйся на него, но мелкие стилистические
+            отличия ошибкой не считай.
 
-            Твоя задача — дать разбор по четырём пунктам:
-
-            1. translationCorrect — верен ли перевод пользователя на русский по смыслу и
-               грамматически (true/false).
-
-            2. explanationKazakh — разбор перевода. Пиши ЭТОТ ТЕКСТ ТОЛЬКО НА КАЗАХСКОМ ЯЗЫКЕ,
-               коротко и по-человечески, как объяснил бы преподаватель на родном для ученика языке:
-               что не так в переводе на русский и почему, при необходимости упомяни падежи,
-               окончания, вид глагола, порядок слов. Если перевод верен — коротко похвали на
-               казахском.
-
-            3. nativeRussianVariant — САМОЕ ВАЖНОЕ ПОЛЕ. Здесь покажи, как эту же мысль естественно
-               выразил бы НОСИТЕЛЬ РУССКОГО ЯЗЫКА. Это пример живой, грамотной русской речи —
-               ориентир для пользователя, чтобы он видел, как звучит русский язык на самом деле.
-               ПИШИ ЭТОТ ТЕКСТ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ. Никогда не переводи его на казахский и не
-               путай с полем explanationKazakh. Заполняй это поле всегда — даже если перевод
-               пользователя уже составлен правильно, всё равно предложи естественный, живой вариант
-               (могут отличаться порядком слов, более разговорным оборотом и т.п.).
-
-            4. kazakhPhraseNote — если в исходной казахской фразе пользователя (не в переводе, а в
-               самой фразе, которую он придумал) есть грамматические ошибки — кратко объясни их
-               ТОЛЬКО НА КАЗАХСКОМ ЯЗЫКЕ. Если ошибок нет — оставь пустой строкой.
-
-            Не путай языки местами: explanationKazakh и kazakhPhraseNote — всегда на казахском,
-            nativeRussianVariant — всегда на русском.
+            Дай разбор по четырём полям:
+            1. translationCorrect — верна ли попытка ученика по смыслу и грамматике языка «{target}».
+            2. explanationBridge — разбор НА ЯЗЫКЕ «{bridge}», коротко и по-человечески: что не так и
+               почему (порядок слов, окончания, время, предлоги, согласование). Если всё верно —
+               коротко похвали.
+            3. nativeVariant — как эту же мысль естественно сказал бы носитель языка «{target}».
+               ПИШИ ТОЛЬКО НА ЯЗЫКЕ «{target}». Заполняй всегда.
+            4. tipBridge — один короткий совет на будущее НА ЯЗЫКЕ «{bridge}», или пустая строка.
             """;
 
     private final AnthropicClient client;
 
-    public ClaudeTranslationChecker(@Value("${anthropic.api-key}") String apiKey) {
-        this.client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();
+    public ClaudeTranslationChecker(AnthropicClient client) {
+        this.client = client;
     }
 
-    public TranslationFeedback check(String kazakhPhrase, String russianTranslation) {
-        String userContent = "Фраза пользователя на казахском: " + kazakhPhrase
-                + "\nПеревод пользователя на русский: " + russianTranslation;
+    public TranslationFeedback check(LanguagePair pair,
+                                    String bridgePhrase,
+                                    String targetAttempt,
+                                    String targetReference) {
+        String userContent = "Фраза на языке «" + pair.bridgeLanguage() + "»: " + bridgePhrase
+                + "\nПопытка ученика на языке «" + pair.targetLanguage() + "»: " + targetAttempt;
+        if (targetReference != null && !targetReference.isBlank()) {
+            userContent += "\nЭталонный вариант на языке «" + pair.targetLanguage() + "»: " + targetReference;
+        }
 
         StructuredMessageCreateParams<TranslationFeedback> params = MessageCreateParams.builder()
-                .model("claude-opus-5")
+                .model(ClaudeSupport.MODEL)
                 .maxTokens(1536L)
-                .system(SYSTEM_PROMPT)
+                .system(ClaudeSupport.fill(SYSTEM_PROMPT_TEMPLATE, pair))
                 .outputConfig(TranslationFeedback.class)
                 .addUserMessage(userContent)
                 .build();
 
-        return client.messages().create(params).content().stream()
-                .flatMap(block -> block.text().stream())
-                .findFirst()
-                .map(textBlock -> textBlock.text())
-                .orElseThrow(() -> new IllegalStateException("Claude вернул пустой ответ"));
+        return ClaudeSupport.firstStructured(client, params);
     }
 }
